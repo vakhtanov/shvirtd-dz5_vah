@@ -1,0 +1,103 @@
+version: "3"
+# The parser will ignore extension fields prefixed with x-
+# x-deploy: &deploy-dev
+#   deploy:
+#     resources:
+#       limits:
+#         cpus: "1"
+#         memory: 512M
+#       reservations:
+#         memory: 256M
+# x-env_file: &env_file
+#   env_file:
+#     - .env
+x-restart: &restart
+  restart: always #no, on-failure , always(default), unless-stopped 
+
+include:
+  - proxy.yaml
+
+services:
+  db:
+    image: mysql:8
+    networks: 
+        backend:
+            ipv4_address: 172.20.0.10
+    <<: [*restart]
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_ROOT_HOST="%" # <--- Это вам обязательно понадобится при выполнении ДЗ!
+    # volumes:
+    #   - wp_data:/var/www/html
+
+  web:
+    depends_on: ["db"]
+    build:
+       context: .
+       dockerfile: Dockerfile.python
+
+    networks: 
+        backend: 
+           ipv4_address: 172.20.0.5
+        
+    <<: [*restart]
+    environment:
+      - DB_HOST=db
+      - DB_NAME=${MYSQL_DATABASE}
+      - DB_USER=${MYSQL_USER}
+      - DB_PASSWORD=${MYSQL_PASSWORD}
+    # healthcheck:
+    #   test:
+    #     [
+    #       "CMD-SHELL",
+    #       "curl -f http://127.0.0.1/wp-admin/install.php/ | grep 'Продолжить' || exit 1",
+    #     ]
+    #   interval: 10s
+    #   timeout: 5s
+    #   retries: 2
+
+  # wordpress:
+  #   depends_on: ["mysql"]
+  #   image: wordpress:php8.2-apache
+  #   volumes:
+  #     - wp_data:/var/www/html
+  #   networks: ["wordpress"]
+  #   <<: [*deploy-dev, *env_file, *restart]
+  #   environment:
+  #     - WORDPRESS_DB_NAME=wordpress
+  #     - WORDPRESS_DB_USER=wordpress
+  #     - WORDPRESS_DB_PASSWORD=${MYSQL_PASSWORD}
+  #     - WORDPRESS_DB_HOST=mysql
+  #   healthcheck:
+  #     test:
+  #       [
+  #         "CMD-SHELL",
+  #         "curl -f http://127.0.0.1/wp-admin/install.php/ | grep 'Продолжить' || exit 1",
+  #       ]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 2
+
+  # nginx:
+  #   build:
+  #     context: .
+  #     dockerfile: nginx.dockerfile
+  #   depends_on: ["mysql"]
+  #   ports: ["80:80"]
+  #   networks: ["wordpress"]
+
+
+
+volumes:
+  db_data: {}
+ 
+
+networks:
+  backend:
+    driver: bridge
+    ipam:
+     config:
+       - subnet: 172.20.0.0/24
